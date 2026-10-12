@@ -49,7 +49,7 @@ export default function Workspace() {
   const fetchWorkspaceProfile = useCallback(async (uname) => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, email, notice, created_at')
+      .select('*')
       .eq('username', uname)
       .single()
 

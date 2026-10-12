@@ -30,7 +30,7 @@ export function AuthProvider({ children }) {
     }
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, email, notice, created_at')
+      .select('*')
       .eq('id', userId)
       .single()
 
@@ -144,6 +144,17 @@ export function AuthProvider({ children }) {
     return { error }
   }, [])
 
+  // -------------------------------------------------------------------------
+  // refreshProfile — re-fetch the current user's profile from the database.
+  // Used after profile updates (e.g. saving the notice board) so the UI
+  // reflects the change immediately.
+  // -------------------------------------------------------------------------
+  const refreshProfile = useCallback(async () => {
+    if (user?.id) {
+      await fetchProfile(user.id)
+    }
+  }, [user?.id, fetchProfile])
+
   const value = {
     session,
     user,
@@ -152,6 +163,7 @@ export function AuthProvider({ children }) {
     signUp,
     signIn,
     signOut,
+    refreshProfile,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -15,7 +15,7 @@ import Spinner from '../components/Spinner'
 // ---------------------------------------------------------------------------
 
 export default function Dashboard() {
-  const { user, profile } = useAuth()
+  const { user, profile, refreshProfile } = useAuth()
 
   const [meetings, setMeetings] = useState([])
   const [loading, setLoading] = useState(true)
@@ -77,9 +77,37 @@ export default function Dashboard() {
       .eq('id', user.id)
 
     if (error) {
-      showToast('Failed to save notice.', 'error')
+      showToast(
+        error.message.includes('notice')
+          ? 'Run the SQL migration 003_add_notice.sql in Supabase to enable the notice board.'
+          : `Failed to save notice: ${error.message}`,
+        'error'
+      )
     } else {
       showToast('Notice saved.')
+      await refreshProfile()
+    }
+    setSavingNotice(false)
+  }
+
+  const handleClearNotice = async () => {
+    setSavingNotice(true)
+    const { error } = await supabase
+      .from('profiles')
+      .update({ notice: null })
+      .eq('id', user.id)
+
+    if (error) {
+      showToast(
+        error.message.includes('notice')
+          ? 'Run the SQL migration 003_add_notice.sql in Supabase to enable the notice board.'
+          : `Failed to clear notice: ${error.message}`,
+        'error'
+      )
+    } else {
+      setNoticeText('')
+      showToast('Notice cleared.')
+      await refreshProfile()
     }
     setSavingNotice(false)
   }
@@ -256,21 +284,31 @@ export default function Dashboard() {
           </div>
           <textarea
             value={noticeText}
-            onChange={(e) => setNoticeText(e.target.value.slice(0, 500))}
+            onChange={(e) => setNoticeText(e.target.value)}
             placeholder="e.g. All meetings are locked today. Back tomorrow at 9 AM."
             rows={3}
-            maxLength={500}
             className="w-full resize-none rounded-lg border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-executive-500 focus:outline-none focus:ring-1 focus:ring-executive-500"
           />
           <div className="mt-2 flex items-center justify-between">
-            <span className="text-xs text-slate-500">{noticeText.length}/500</span>
-            <button
-              onClick={handleSaveNotice}
-              disabled={savingNotice || noticeText === (profile?.notice || '')}
-              className="rounded-lg bg-executive-600 px-4 py-2 text-sm font-semibold text-white hover:bg-executive-700 disabled:opacity-50 disabled:cursor-wait transition"
-            >
-              {savingNotice ? 'Saving...' : 'Save Notice'}
-            </button>
+            <span className="text-xs text-slate-500">{noticeText.length} characters</span>
+            <div className="flex items-center gap-2">
+              {profile?.notice && (
+                <button
+                  onClick={handleClearNotice}
+                  disabled={savingNotice}
+                  className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-wait transition"
+                >
+                  Clear
+                </button>
+              )}
+              <button
+                onClick={handleSaveNotice}
+                disabled={savingNotice || noticeText === (profile?.notice || '')}
+                className="rounded-lg bg-executive-600 px-4 py-2 text-sm font-semibold text-white hover:bg-executive-700 disabled:opacity-50 disabled:cursor-wait transition"
+              >
+                {savingNotice ? 'Saving...' : 'Save Notice'}
+              </button>
+            </div>
           </div>
         </div>
 
