@@ -125,14 +125,6 @@ export default function MeetingCard({
         </p>
       )}
 
-      {/* URL preview */}
-      <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
-        <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656m5.656-3l3-3a4 4 0 015.656 5.656" />
-        </svg>
-        <span className="truncate">{url}</span>
-      </div>
-
       {/* Spacer to push controls to the bottom */}
       <div className="flex-1" />
 
