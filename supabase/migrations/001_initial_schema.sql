@@ -18,6 +18,7 @@ create table if not exists public.profiles (
   username    text unique not null
               check (username ~ '^[a-zA-Z0-9_-]{3,20}$'),
   email       text not null,
+  notice      text,
   created_at  timestamp with time zone
               default timezone('utc'::text, now()) not null
 );

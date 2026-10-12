@@ -23,6 +23,8 @@ export default function Dashboard() {
   const [editingMeeting, setEditingMeeting] = useState(null)
   const [deleteId, setDeleteId] = useState(null)
   const [toast, setToast] = useState(null)
+  const [noticeText, setNoticeText] = useState('')
+  const [savingNotice, setSavingNotice] = useState(false)
 
   // -------------------------------------------------------------------------
   // Fetch meetings belonging to the current user
@@ -50,11 +52,36 @@ export default function Dashboard() {
   }, [fetchMeetings])
 
   // -------------------------------------------------------------------------
+  // Sync notice editor with profile data
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    setNoticeText(profile?.notice || '')
+  }, [profile?.notice])
+
+  // -------------------------------------------------------------------------
   // Toast helper
   // -------------------------------------------------------------------------
   const showToast = (message, type = 'success') => {
     setToast({ message, type })
     setTimeout(() => setToast(null), 3000)
+  }
+
+  // -------------------------------------------------------------------------
+  // Save notice to the profiles table
+  // -------------------------------------------------------------------------
+  const handleSaveNotice = async () => {
+    setSavingNotice(true)
+    const { error } = await supabase
+      .from('profiles')
+      .update({ notice: noticeText.trim() || null })
+      .eq('id', user.id)
+
+    if (error) {
+      showToast('Failed to save notice.', 'error')
+    } else {
+      showToast('Notice saved.')
+    }
+    setSavingNotice(false)
   }
 
   // -------------------------------------------------------------------------
@@ -212,6 +239,40 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+
+        {/* Notice board editor */}
+        <div className="mt-6 rounded-xl border border-slate-800 bg-slate-800/50 p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <svg className="h-5 w-5 shrink-0 text-executive-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5.882V19.33a1.618 1.618 0 01-2.482 1.366L5.5 19.5l3.018-1.047A1.618 1.618 0 0111 19.33V5.882zM19 5.882V19.33a1.618 1.618 0 002.482 1.366L24.5 19.5l-3.018 1.047A1.618 1.618 0 0119 19.33V5.882z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11 6l8-2v2l-8 2" />
+            </svg>
+            <div>
+              <p className="text-sm font-semibold text-slate-200">Notice Board</p>
+              <p className="text-xs text-slate-500">
+                Post a message visitors see at the top of your workspace.
+              </p>
+            </div>
+          </div>
+          <textarea
+            value={noticeText}
+            onChange={(e) => setNoticeText(e.target.value.slice(0, 500))}
+            placeholder="e.g. All meetings are locked today. Back tomorrow at 9 AM."
+            rows={3}
+            maxLength={500}
+            className="w-full resize-none rounded-lg border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-executive-500 focus:outline-none focus:ring-1 focus:ring-executive-500"
+          />
+          <div className="mt-2 flex items-center justify-between">
+            <span className="text-xs text-slate-500">{noticeText.length}/500</span>
+            <button
+              onClick={handleSaveNotice}
+              disabled={savingNotice || noticeText === (profile?.notice || '')}
+              className="rounded-lg bg-executive-600 px-4 py-2 text-sm font-semibold text-white hover:bg-executive-700 disabled:opacity-50 disabled:cursor-wait transition"
+            >
+              {savingNotice ? 'Saving...' : 'Save Notice'}
+            </button>
+          </div>
+        </div>
 
         {/* Meetings grid */}
         <div className="mt-8">
