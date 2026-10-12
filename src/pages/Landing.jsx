@@ -60,11 +60,11 @@ export default function Landing() {
         <div className="pointer-events-none absolute top-20 right-0 h-72 w-72 rounded-full bg-executive-500/10 blur-3xl" />
 
         <div className="relative mx-auto max-w-5xl px-4 pt-20 pb-16 text-center sm:px-6 lg:px-8">
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl ring-1 ring-slate-700">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-slate-800 p-2 ring-1 ring-slate-700">
             <img
               src="/logo.png"
               alt="Polmz Boardroom"
-              className="h-full w-full object-cover"
+              className="h-full w-full object-contain"
               onError={(e) => { e.currentTarget.style.display = 'none' }}
             />
           </div>

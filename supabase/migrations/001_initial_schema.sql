@@ -47,22 +47,50 @@ create index if not exists meetings_user_id_idx on public.meetings (user_id);
 -- ============================================================================
 -- NOTE: The original spec used "create or function" which is invalid syntax.
 --       The correct PostgreSQL syntax is "create or replace function".
+--
+-- IMPORTANT FIXES from original spec:
+--   - search_path set to 'public' instead of '' to avoid function resolution
+--     failures in certain Supabase configurations.
+--   - Fallback username (from email prefix) is sanitised to match the check
+--     constraint ^[a-zA-Z0-9_-]{3,20}$. Without this, an email like
+--     john.doe@example.com would produce username "john.doe" (contains a dot)
+--     which violates the constraint and rolls back the entire signup.
+--   - Minimum-length enforcement: if the sanitised username is shorter than
+--     3 characters, a random suffix is appended.
 
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
-security definer set search_path = ''
+security definer set search_path = public
 as $$
+declare
+  v_username text;
 begin
+  -- Prefer username passed via sign-up metadata
+  v_username := new.raw_user_meta_data ->> 'username';
+
+  -- Fallback: derive from email prefix and strip characters that violate
+  -- the check constraint ^[a-zA-Z0-9_-]{3,20}$
+  if v_username is null or v_username = '' then
+    v_username := regexp_replace(
+      split_part(new.email, '@', 1),
+      '[^a-zA-Z0-9_-]',
+      '',
+      'g'
+    );
+  end if;
+
+  -- If still too short after sanitising, pad with a random suffix
+  if char_length(v_username) < 3 then
+    v_username := left(v_username || 'user' || substr(md5(random()::text), 1, 6), 20);
+  end if;
+
+  -- Enforce maximum length of 20
+  v_username := left(v_username, 20);
+
   insert into public.profiles (id, username, email)
-  values (
-    new.id,
-    coalesce(
-      new.raw_user_meta_data ->> 'username',
-      split_part(new.email, '@', 1)
-    ),
-    new.email
-  );
+  values (new.id, v_username, new.email);
+
   return new;
 end;
 $$;

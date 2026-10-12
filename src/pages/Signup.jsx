@@ -88,7 +88,18 @@ export default function Signup() {
         })
 
         if (signUpError) {
-          setError(signUpError.message || 'Failed to create account.')
+          // Translate common Supabase auth errors into friendly messages
+          const msg = signUpError.message || ''
+          if (msg.toLowerCase().includes('already registered') || msg.toLowerCase().includes('already been registered')) {
+            setError('An account with this email already exists. Try logging in instead.')
+          } else if (msg.toLowerCase().includes('saving new user') || msg.toLowerCase().includes('error saving')) {
+            setError(
+              'Account creation failed — the database trigger could not save your profile. ' +
+              'Please make sure you have run the SQL migration script in your Supabase SQL Editor, then try again.'
+            )
+          } else {
+            setError(msg || 'Failed to create account. Please try again.')
+          }
           return
         }
 
