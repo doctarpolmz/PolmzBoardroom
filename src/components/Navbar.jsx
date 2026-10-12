@@ -23,15 +23,15 @@ export default function Navbar() {
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Brand + logo (top-left) */}
         <Link to="/" className="flex items-center gap-3 group">
-          <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg bg-slate-800 p-1.5 ring-1 ring-slate-700 group-hover:ring-executive-500 transition-all">
+          <div className="h-10 w-10 overflow-hidden rounded-lg bg-slate-800 ring-1 ring-slate-700 group-hover:ring-executive-500 transition-all">
             <img
               src="/logo.png"
               alt="Polmz Boardroom logo"
-              className="h-full w-full object-contain"
+              className="block h-full w-full object-cover object-center"
               onError={(e) => {
-                // Graceful fallback if logo asset is missing
                 e.currentTarget.style.display = 'none'
                 e.currentTarget.parentElement.classList.add(
+                  'flex', 'items-center', 'justify-center',
                   'bg-executive-600'
                 )
                 e.currentTarget.parentElement.innerHTML = '<span class="text-white font-bold text-lg">P</span>'
