@@ -35,6 +35,10 @@ export default function Dashboard() {
   const [savingNoticeId, setSavingNoticeId] = useState(null)
   const [deleteNoticeId, setDeleteNoticeId] = useState(null)
 
+  // Audit log state
+  const [auditLog, setAuditLog] = useState([])
+  const [auditOpen, setAuditOpen] = useState(false)
+
   // -------------------------------------------------------------------------
   // Toast helper
   // -------------------------------------------------------------------------
@@ -82,10 +86,25 @@ export default function Dashboard() {
     }
   }, [user?.id])
 
+  // -------------------------------------------------------------------------
+  // Fetch audit log
+  // -------------------------------------------------------------------------
+  const fetchAuditLog = useCallback(async () => {
+    if (!user?.id) return
+    const { data, error } = await supabase
+      .from('audit_log')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(50)
+    if (!error) setAuditLog(data || [])
+  }, [user?.id])
+
   useEffect(() => {
     fetchMeetings()
     fetchNotices()
-  }, [fetchMeetings, fetchNotices])
+    fetchAuditLog()
+  }, [fetchMeetings, fetchNotices, fetchAuditLog])
 
   // -------------------------------------------------------------------------
   // Notice: Add new
@@ -102,6 +121,7 @@ export default function Dashboard() {
       showToast(`Failed to add notice: ${error.message}`, 'error')
     } else {
       showToast('Notice posted.')
+      logAudit('created', 'notice', null, `Notice posted`)
       setNewNotice('')
       fetchNotices()
     }
@@ -158,6 +178,7 @@ export default function Dashboard() {
       showToast(`Failed to delete notice: ${error.message}`, 'error')
     } else {
       showToast('Notice deleted.')
+      logAudit('deleted', 'notice', deleteNoticeId, 'Notice deleted')
       setNotices((prev) => prev.filter((n) => n.id !== deleteNoticeId))
     }
     setDeleteNoticeId(null)
@@ -176,6 +197,13 @@ export default function Dashboard() {
     setFormOpen(true)
   }
 
+  const logAudit = async (action, entity, entityId, detail) => {
+    await supabase.from('audit_log').insert({
+      user_id: user.id, action, entity, entity_id: entityId, detail,
+    })
+    fetchAuditLog()
+  }
+
   const handleSaveMeeting = async (formData) => {
     if (editingMeeting) {
       const { error } = await supabase
@@ -184,6 +212,10 @@ export default function Dashboard() {
           title: formData.title,
           description: formData.description,
           url: formData.url,
+          passcode: formData.passcode,
+          scheduled_at: formData.scheduled_at,
+          ends_at: formData.ends_at,
+          resources: formData.resources,
         })
         .eq('id', editingMeeting.id)
 
@@ -191,24 +223,32 @@ export default function Dashboard() {
         showToast('Failed to update meeting.', 'error')
       } else {
         showToast('Meeting updated successfully.')
+        logAudit('updated', 'meeting', editingMeeting.id, `"${formData.title}" updated`)
         setFormOpen(false)
         setEditingMeeting(null)
         fetchMeetings()
       }
     } else {
-      const { error } = await supabase
+      const { data: inserted, error } = await supabase
         .from('meetings')
         .insert({
           user_id: user.id,
           title: formData.title,
           description: formData.description,
           url: formData.url,
+          passcode: formData.passcode,
+          scheduled_at: formData.scheduled_at,
+          ends_at: formData.ends_at,
+          resources: formData.resources,
         })
+        .select()
+        .single()
 
       if (error) {
         showToast('Failed to create meeting.', 'error')
       } else {
         showToast('Meeting created successfully.')
+        logAudit('created', 'meeting', inserted?.id, `"${formData.title}" created`)
         setFormOpen(false)
         fetchMeetings()
       }
@@ -227,10 +267,14 @@ export default function Dashboard() {
     if (error) {
       showToast('Failed to toggle lock.', 'error')
     } else {
+      const m = meetings.find(x => x.id === meetingId)
+      logAudit(
+        !currentValue ? 'locked' : 'unlocked',
+        'meeting', meetingId,
+        `"${m?.title}" ${!currentValue ? 'locked' : 'unlocked'}`
+      )
       setMeetings((prev) =>
-        prev.map((m) =>
-          m.id === meetingId ? { ...m, is_locked: !currentValue } : m
-        )
+        prev.map((m) => m.id === meetingId ? { ...m, is_locked: !currentValue } : m)
       )
     }
   }
@@ -240,15 +284,13 @@ export default function Dashboard() {
   // -------------------------------------------------------------------------
   const handleConfirmDelete = async () => {
     if (!deleteId) return
-    const { error } = await supabase
-      .from('meetings')
-      .delete()
-      .eq('id', deleteId)
-
+    const m = meetings.find(x => x.id === deleteId)
+    const { error } = await supabase.from('meetings').delete().eq('id', deleteId)
     if (error) {
       showToast('Failed to delete meeting.', 'error')
     } else {
       showToast('Meeting deleted.')
+      logAudit('deleted', 'meeting', deleteId, `"${m?.title}" deleted`)
       setMeetings((prev) => prev.filter((m) => m.id !== deleteId))
     }
     setDeleteId(null)
@@ -426,6 +468,52 @@ export default function Dashboard() {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* Audit log */}
+        <div className="mt-6 rounded-xl border border-slate-800 bg-slate-800/50 p-5">
+          <button
+            onClick={() => { setAuditOpen(v => !v); if (!auditOpen) fetchAuditLog() }}
+            className="flex w-full items-center justify-between"
+          >
+            <div className="flex items-center gap-2">
+              <svg className="h-5 w-5 shrink-0 text-executive-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              <div className="text-left">
+                <p className="text-sm font-semibold text-slate-200">Activity Log</p>
+                <p className="text-xs text-slate-500">Recent actions in your workspace</p>
+              </div>
+            </div>
+            <svg className={`h-4 w-4 text-slate-400 transition-transform ${auditOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {auditOpen && (
+            <div className="mt-4">
+              {auditLog.length === 0 ? (
+                <p className="text-sm text-slate-500 text-center py-4">No activity recorded yet.</p>
+              ) : (
+                <div className="space-y-1">
+                  {auditLog.map((entry) => (
+                    <div key={entry.id} className="flex items-start gap-3 rounded-lg px-3 py-2.5 hover:bg-slate-800 transition">
+                      <div className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${
+                        entry.action === 'locked'   ? 'bg-red-500' :
+                        entry.action === 'unlocked' ? 'bg-emerald-500' :
+                        entry.action === 'deleted'  ? 'bg-rose-400' :
+                        entry.action === 'created'  ? 'bg-blue-400' : 'bg-slate-400'
+                      }`} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-slate-200">{entry.detail}</p>
+                        <p className="mt-0.5 text-xs text-slate-500">{formatDate(entry.created_at)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

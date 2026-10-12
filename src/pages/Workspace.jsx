@@ -200,6 +200,10 @@ export default function Workspace() {
           title: formData.title,
           description: formData.description,
           url: formData.url,
+          passcode: formData.passcode,
+          scheduled_at: formData.scheduled_at,
+          ends_at: formData.ends_at,
+          resources: formData.resources,
         })
         .eq('id', editingMeeting.id)
 
@@ -219,6 +223,10 @@ export default function Workspace() {
           title: formData.title,
           description: formData.description,
           url: formData.url,
+          passcode: formData.passcode,
+          scheduled_at: formData.scheduled_at,
+          ends_at: formData.ends_at,
+          resources: formData.resources,
         })
 
       if (error) {
