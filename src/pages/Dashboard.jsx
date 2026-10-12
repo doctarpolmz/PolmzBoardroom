@@ -11,23 +11,40 @@ import Spinner from '../components/Spinner'
 // Dashboard (owner-only)
 // ---------------------------------------------------------------------------
 // The authenticated owner's meeting management hub. Supports create, edit,
-// delete, and lock/unlock — all gated by the ProtectedRoute wrapper and RLS.
+// delete, and lock/unlock for meetings — plus full CRUD for the notice board.
+// All gated by the ProtectedRoute wrapper and RLS.
 // ---------------------------------------------------------------------------
 
 export default function Dashboard() {
-  const { user, profile, refreshProfile } = useAuth()
+  const { user, profile } = useAuth()
 
+  // Meeting state
   const [meetings, setMeetings] = useState([])
   const [loading, setLoading] = useState(true)
   const [formOpen, setFormOpen] = useState(false)
   const [editingMeeting, setEditingMeeting] = useState(null)
   const [deleteId, setDeleteId] = useState(null)
   const [toast, setToast] = useState(null)
-  const [noticeText, setNoticeText] = useState('')
-  const [savingNotice, setSavingNotice] = useState(false)
+
+  // Notice state
+  const [notices, setNotices] = useState([])
+  const [newNotice, setNewNotice] = useState('')
+  const [addingNotice, setAddingNotice] = useState(false)
+  const [editingNoticeId, setEditingNoticeId] = useState(null)
+  const [editingNoticeText, setEditingNoticeText] = useState('')
+  const [savingNoticeId, setSavingNoticeId] = useState(null)
+  const [deleteNoticeId, setDeleteNoticeId] = useState(null)
 
   // -------------------------------------------------------------------------
-  // Fetch meetings belonging to the current user
+  // Toast helper
+  // -------------------------------------------------------------------------
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  // -------------------------------------------------------------------------
+  // Fetch meetings
   // -------------------------------------------------------------------------
   const fetchMeetings = useCallback(async () => {
     if (!user?.id) return
@@ -47,73 +64,107 @@ export default function Dashboard() {
     setLoading(false)
   }, [user?.id])
 
+  // -------------------------------------------------------------------------
+  // Fetch notices
+  // -------------------------------------------------------------------------
+  const fetchNotices = useCallback(async () => {
+    if (!user?.id) return
+    const { data, error } = await supabase
+      .from('notices')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('[Dashboard] Error fetching notices:', error.message)
+    } else {
+      setNotices(data || [])
+    }
+  }, [user?.id])
+
   useEffect(() => {
     fetchMeetings()
-  }, [fetchMeetings])
+    fetchNotices()
+  }, [fetchMeetings, fetchNotices])
 
   // -------------------------------------------------------------------------
-  // Sync notice editor with profile data
+  // Notice: Add new
   // -------------------------------------------------------------------------
-  useEffect(() => {
-    setNoticeText(profile?.notice || '')
-  }, [profile?.notice])
-
-  // -------------------------------------------------------------------------
-  // Toast helper
-  // -------------------------------------------------------------------------
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
-
-  // -------------------------------------------------------------------------
-  // Save notice to the profiles table
-  // -------------------------------------------------------------------------
-  const handleSaveNotice = async () => {
-    setSavingNotice(true)
+  const handleAddNotice = async () => {
+    const content = newNotice.trim()
+    if (!content) return
+    setAddingNotice(true)
     const { error } = await supabase
-      .from('profiles')
-      .update({ notice: noticeText.trim() || null })
-      .eq('id', user.id)
+      .from('notices')
+      .insert({ user_id: user.id, content })
 
     if (error) {
-      showToast(
-        error.message.includes('notice')
-          ? 'Run the SQL migration 003_add_notice.sql in Supabase to enable the notice board.'
-          : `Failed to save notice: ${error.message}`,
-        'error'
-      )
+      showToast(`Failed to add notice: ${error.message}`, 'error')
     } else {
-      showToast('Notice saved.')
-      await refreshProfile()
+      showToast('Notice posted.')
+      setNewNotice('')
+      fetchNotices()
     }
-    setSavingNotice(false)
-  }
-
-  const handleClearNotice = async () => {
-    setSavingNotice(true)
-    const { error } = await supabase
-      .from('profiles')
-      .update({ notice: null })
-      .eq('id', user.id)
-
-    if (error) {
-      showToast(
-        error.message.includes('notice')
-          ? 'Run the SQL migration 003_add_notice.sql in Supabase to enable the notice board.'
-          : `Failed to clear notice: ${error.message}`,
-        'error'
-      )
-    } else {
-      setNoticeText('')
-      showToast('Notice cleared.')
-      await refreshProfile()
-    }
-    setSavingNotice(false)
+    setAddingNotice(false)
   }
 
   // -------------------------------------------------------------------------
-  // Create / Edit meeting
+  // Notice: Start editing
+  // -------------------------------------------------------------------------
+  const handleStartEditNotice = (notice) => {
+    setEditingNoticeId(notice.id)
+    setEditingNoticeText(notice.content)
+  }
+
+  const handleCancelEditNotice = () => {
+    setEditingNoticeId(null)
+    setEditingNoticeText('')
+  }
+
+  // -------------------------------------------------------------------------
+  // Notice: Save edited
+  // -------------------------------------------------------------------------
+  const handleSaveEditNotice = async (noticeId) => {
+    const content = editingNoticeText.trim()
+    if (!content) return
+    setSavingNoticeId(noticeId)
+    const { error } = await supabase
+      .from('notices')
+      .update({ content })
+      .eq('id', noticeId)
+
+    if (error) {
+      showToast(`Failed to update notice: ${error.message}`, 'error')
+    } else {
+      showToast('Notice updated.')
+      setEditingNoticeId(null)
+      setEditingNoticeText('')
+      fetchNotices()
+    }
+    setSavingNoticeId(null)
+  }
+
+  // -------------------------------------------------------------------------
+  // Notice: Delete
+  // -------------------------------------------------------------------------
+  const handleConfirmDeleteNotice = async () => {
+    if (!deleteNoticeId) return
+    const { error } = await supabase
+      .from('notices')
+      .delete()
+      .eq('id', deleteNoticeId)
+
+    if (error) {
+      showToast(`Failed to delete notice: ${error.message}`, 'error')
+    } else {
+      showToast('Notice deleted.')
+      setNotices((prev) => prev.filter((n) => n.id !== deleteNoticeId))
+    }
+    setDeleteNoticeId(null)
+  }
+
+  // -------------------------------------------------------------------------
+  // Meeting: Create / Edit
   // -------------------------------------------------------------------------
   const handleOpenCreate = () => {
     setEditingMeeting(null)
@@ -127,7 +178,6 @@ export default function Dashboard() {
 
   const handleSaveMeeting = async (formData) => {
     if (editingMeeting) {
-      // Update existing
       const { error } = await supabase
         .from('meetings')
         .update({
@@ -146,7 +196,6 @@ export default function Dashboard() {
         fetchMeetings()
       }
     } else {
-      // Create new
       const { error } = await supabase
         .from('meetings')
         .insert({
@@ -167,7 +216,7 @@ export default function Dashboard() {
   }
 
   // -------------------------------------------------------------------------
-  // Toggle lock (owner is always allowed here, so no guard needed)
+  // Meeting: Toggle lock
   // -------------------------------------------------------------------------
   const handleToggleLock = async (meetingId, currentValue) => {
     const { error } = await supabase
@@ -178,7 +227,6 @@ export default function Dashboard() {
     if (error) {
       showToast('Failed to toggle lock.', 'error')
     } else {
-      // Optimistic local update
       setMeetings((prev) =>
         prev.map((m) =>
           m.id === meetingId ? { ...m, is_locked: !currentValue } : m
@@ -188,7 +236,7 @@ export default function Dashboard() {
   }
 
   // -------------------------------------------------------------------------
-  // Delete meeting
+  // Meeting: Delete
   // -------------------------------------------------------------------------
   const handleConfirmDelete = async () => {
     if (!deleteId) return
@@ -204,6 +252,15 @@ export default function Dashboard() {
       setMeetings((prev) => prev.filter((m) => m.id !== deleteId))
     }
     setDeleteId(null)
+  }
+
+  // -------------------------------------------------------------------------
+  // Format timestamp
+  // -------------------------------------------------------------------------
+  const formatDate = (dateStr) => {
+    const d = new Date(dateStr)
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
+      ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
   }
 
   const workspaceUrl = profile?.username
@@ -268,9 +325,9 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Notice board editor */}
+        {/* Notice board */}
         <div className="mt-6 rounded-xl border border-slate-800 bg-slate-800/50 p-5">
-          <div className="mb-3 flex items-center gap-2">
+          <div className="mb-4 flex items-center gap-2">
             <svg className="h-5 w-5 shrink-0 text-executive-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M11 5.882V19.33a1.618 1.618 0 01-2.482 1.366L5.5 19.5l3.018-1.047A1.618 1.618 0 0111 19.33V5.882zM19 5.882V19.33a1.618 1.618 0 002.482 1.366L24.5 19.5l-3.018 1.047A1.618 1.618 0 0119 19.33V5.882z" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M11 6l8-2v2l-8 2" />
@@ -278,38 +335,99 @@ export default function Dashboard() {
             <div>
               <p className="text-sm font-semibold text-slate-200">Notice Board</p>
               <p className="text-xs text-slate-500">
-                Post a message visitors see at the top of your workspace.
+                Post messages visitors see at the top of your workspace.
               </p>
             </div>
           </div>
-          <textarea
-            value={noticeText}
-            onChange={(e) => setNoticeText(e.target.value)}
-            placeholder="e.g. All meetings are locked today. Back tomorrow at 9 AM."
-            rows={3}
-            className="w-full resize-none rounded-lg border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-executive-500 focus:outline-none focus:ring-1 focus:ring-executive-500"
-          />
-          <div className="mt-2 flex items-center justify-between">
-            <span className="text-xs text-slate-500">{noticeText.length} characters</span>
-            <div className="flex items-center gap-2">
-              {profile?.notice && (
-                <button
-                  onClick={handleClearNotice}
-                  disabled={savingNotice}
-                  className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-wait transition"
-                >
-                  Clear
-                </button>
-              )}
-              <button
-                onClick={handleSaveNotice}
-                disabled={savingNotice || noticeText === (profile?.notice || '')}
-                className="rounded-lg bg-executive-600 px-4 py-2 text-sm font-semibold text-white hover:bg-executive-700 disabled:opacity-50 disabled:cursor-wait transition"
-              >
-                {savingNotice ? 'Saving...' : 'Save Notice'}
-              </button>
-            </div>
+
+          {/* Add new notice */}
+          <div className="mb-4">
+            <textarea
+              value={newNotice}
+              onChange={(e) => setNewNotice(e.target.value)}
+              placeholder="Write a new notice..."
+              rows={2}
+              className="w-full resize-none rounded-lg border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-executive-500 focus:outline-none focus:ring-1 focus:ring-executive-500"
+            />
+            <button
+              onClick={handleAddNotice}
+              disabled={addingNotice || !newNotice.trim()}
+              className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-executive-600 px-4 py-2 text-sm font-semibold text-white hover:bg-executive-700 disabled:opacity-50 disabled:cursor-wait transition"
+            >
+              {addingNotice ? 'Posting...' : 'Post Notice'}
+            </button>
           </div>
+
+          {/* Existing notices list */}
+          {notices.length > 0 && (
+            <div className="space-y-2">
+              {notices.map((notice) => (
+                <div
+                  key={notice.id}
+                  className="rounded-lg border border-slate-700 bg-slate-900 p-3"
+                >
+                  {editingNoticeId === notice.id ? (
+                    // Editing mode
+                    <div>
+                      <textarea
+                        value={editingNoticeText}
+                        onChange={(e) => setEditingNoticeText(e.target.value)}
+                        rows={2}
+                        className="w-full resize-none rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:border-executive-500 focus:outline-none focus:ring-1 focus:ring-executive-500"
+                      />
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          onClick={() => handleSaveEditNotice(notice.id)}
+                          disabled={savingNoticeId === notice.id || !editingNoticeText.trim()}
+                          className="rounded-lg bg-executive-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-executive-700 disabled:opacity-50 transition"
+                        >
+                          {savingNoticeId === notice.id ? 'Saving...' : 'Save'}
+                        </button>
+                        <button
+                          onClick={handleCancelEditNotice}
+                          className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-700 transition"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    // Display mode
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
+                          {notice.content}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {formatDate(notice.created_at)}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          onClick={() => handleStartEditNotice(notice)}
+                          aria-label="Edit notice"
+                          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => setDeleteNoticeId(notice.id)}
+                          aria-label="Delete notice"
+                          className="rounded-lg p-1.5 text-slate-400 hover:bg-red-900/50 hover:text-red-400 transition"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Meetings grid */}
@@ -366,6 +484,17 @@ export default function Dashboard() {
         danger
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteId(null)}
+      />
+
+      <ConfirmDialog
+        open={!!deleteNoticeId}
+        title="Delete this notice?"
+        message="This notice will be permanently removed from your workspace."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        danger
+        onConfirm={handleConfirmDeleteNotice}
+        onCancel={() => setDeleteNoticeId(null)}
       />
 
       {/* Toast */}

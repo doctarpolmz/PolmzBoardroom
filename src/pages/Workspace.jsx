@@ -27,6 +27,7 @@ export default function Workspace() {
 
   const [workspaceProfile, setWorkspaceProfile] = useState(null)
   const [meetings, setMeetings] = useState([])
+  const [notices, setNotices] = useState([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
@@ -87,7 +88,28 @@ export default function Workspace() {
   }, [])
 
   // -------------------------------------------------------------------------
-  // Initial load: fetch profile + meetings
+  // Fetch notices for the workspace
+  // -------------------------------------------------------------------------
+  const fetchNotices = useCallback(async (ownerId) => {
+    if (!ownerId) {
+      setNotices([])
+      return
+    }
+    const { data, error } = await supabase
+      .from('notices')
+      .select('*')
+      .eq('user_id', ownerId)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('[Workspace] Error fetching notices:', error.message)
+    } else {
+      setNotices(data || [])
+    }
+  }, [])
+
+  // -------------------------------------------------------------------------
+  // Initial load: fetch profile + meetings + notices
   // -------------------------------------------------------------------------
   useEffect(() => {
     if (!username) return
@@ -98,14 +120,17 @@ export default function Workspace() {
       const profileData = await fetchWorkspaceProfile(username)
       if (cancelled) return
       if (profileData) {
-        await fetchMeetings(profileData.id)
+        await Promise.all([
+          fetchMeetings(profileData.id),
+          fetchNotices(profileData.id),
+        ])
       }
       if (!cancelled) setLoading(false)
     }
 
     load()
     return () => { cancelled = true }
-  }, [username, fetchWorkspaceProfile, fetchMeetings])
+  }, [username, fetchWorkspaceProfile, fetchMeetings, fetchNotices])
 
   // -------------------------------------------------------------------------
   // Toast helper
@@ -313,21 +338,25 @@ export default function Workspace() {
           </div>
         )}
 
-        {/* Notice board — visible to everyone, only if set */}
-        {workspaceProfile?.notice && (
-          <div className="mt-4 rounded-xl border border-slate-700 bg-slate-800/60 p-4">
-            <div className="mb-2 flex items-center gap-2">
-              <svg className="h-4 w-4 shrink-0 text-executive-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5.882V19.33a1.618 1.618 0 01-2.482 1.366L5.5 19.5l3.018-1.047A1.618 1.618 0 0111 19.33V5.882zM19 5.882V19.33a1.618 1.618 0 002.482 1.366L24.5 19.5l-3.018 1.047A1.618 1.618 0 0119 19.33V5.882z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M11 6l8-2v2l-8 2" />
-              </svg>
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Notice
-              </span>
-            </div>
-            <p className="text-sm leading-relaxed text-slate-200 whitespace-pre-wrap">
-              {workspaceProfile.notice}
-            </p>
+        {/* Notice board — visible to everyone, shows all notices */}
+        {notices.length > 0 && (
+          <div className="mt-4 space-y-2">
+            {notices.map((notice) => (
+              <div key={notice.id} className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+                <div className="mb-2 flex items-center gap-2">
+                  <svg className="h-4 w-4 shrink-0 text-executive-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5.882V19.33a1.618 1.618 0 01-2.482 1.366L5.5 19.5l3.018-1.047A1.618 1.618 0 0111 19.33V5.882zM19 5.882V19.33a1.618 1.618 0 002.482 1.366L24.5 19.5l-3.018 1.047A1.618 1.618 0 0119 19.33V5.882z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 6l8-2v2l-8 2" />
+                  </svg>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Notice
+                  </span>
+                </div>
+                <p className="text-sm leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
+                  {notice.content}
+                </p>
+              </div>
+            ))}
           </div>
         )}
 

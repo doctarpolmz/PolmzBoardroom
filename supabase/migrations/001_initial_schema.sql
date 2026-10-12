@@ -18,7 +18,6 @@ create table if not exists public.profiles (
   username    text unique not null
               check (username ~ '^[a-zA-Z0-9_-]{3,20}$'),
   email       text not null,
-  notice      text,
   created_at  timestamp with time zone
               default timezone('utc'::text, now()) not null
 );
@@ -42,6 +41,19 @@ create table if not exists public.meetings (
 
 -- Index foreign key for RLS optimization
 create index if not exists meetings_user_id_idx on public.meetings (user_id);
+
+-- ============================================================================
+-- 2b. Notices Table (multiple notice board entries per workspace)
+-- ============================================================================
+create table if not exists public.notices (
+  id          uuid default gen_random_uuid() primary key,
+  user_id     uuid references public.profiles(id) on delete cascade not null,
+  content     text not null,
+  created_at  timestamp with time zone
+              default timezone('utc'::text, now()) not null
+);
+
+create index if not exists notices_user_id_idx on public.notices (user_id);
 
 -- ============================================================================
 -- 3. Automatic Profile Creation Trigger on Signup
@@ -107,7 +119,8 @@ create trigger on_auth_user_created
 -- 4. Enable Row Level Security (RLS) on all tables
 -- ============================================================================
 alter table public.profiles enable row level security;
-alter table public.meetings  enable row level security;
+alter table public.meetings enable row level security;
+alter table public.notices  enable row level security;
 
 -- ============================================================================
 -- 5. RLS Policies
@@ -164,6 +177,41 @@ drop policy if exists "Users can delete their own meetings"
 
 create policy "Users can delete their own meetings"
   on public.meetings for delete
+  using ((select auth.uid()) = user_id);
+
+-- -------------------------------------------------------
+-- Notices: Public read so visitors can see a workspace's notice board
+-- -------------------------------------------------------
+drop policy if exists "Notices are viewable by everyone"
+  on public.notices;
+
+create policy "Notices are viewable by everyone"
+  on public.notices for select
+  using (true);
+
+-- -------------------------------------------------------
+-- Notices: Insert, Update, Delete restricted to the notice owner
+-- -------------------------------------------------------
+drop policy if exists "Users can insert their own notices"
+  on public.notices;
+
+create policy "Users can insert their own notices"
+  on public.notices for insert
+  with check ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can update their own notices"
+  on public.notices;
+
+create policy "Users can update their own notices"
+  on public.notices for update
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can delete their own notices"
+  on public.notices;
+
+create policy "Users can delete their own notices"
+  on public.notices for delete
   using ((select auth.uid()) = user_id);
 
 -- ============================================================================
