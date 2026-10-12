@@ -57,6 +57,7 @@ export default function Dashboard() {
       .from('meetings')
       .select('*')
       .eq('user_id', user.id)
+      .order('sort_order', { ascending: true })
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -295,6 +296,29 @@ export default function Dashboard() {
     }
     setDeleteId(null)
   }
+
+  // -------------------------------------------------------------------------
+  // Reorder meetings (up / down)
+  // -------------------------------------------------------------------------
+  const handleMove = useCallback(async (index, direction) => {
+    const swapIndex = direction === 'up' ? index - 1 : index + 1
+    if (swapIndex < 0 || swapIndex >= meetings.length) return
+
+    const reordered = [...meetings]
+    const [moved] = reordered.splice(index, 1)
+    reordered.splice(swapIndex, 0, moved)
+
+    // Assign clean sort_order values
+    const updated = reordered.map((m, i) => ({ ...m, sort_order: i }))
+    setMeetings(updated)
+
+    // Persist all affected rows
+    await Promise.all(
+      updated.map((m) =>
+        supabase.from('meetings').update({ sort_order: m.sort_order }).eq('id', m.id)
+      )
+    )
+  }, [meetings])
 
   // -------------------------------------------------------------------------
   // Format timestamp
@@ -536,16 +560,40 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {meetings.map((meeting) => (
-                <MeetingCard
-                  key={meeting.id}
-                  meeting={meeting}
-                  isOwner={true}
-                  onToggleLock={handleToggleLock}
-                  onEdit={handleOpenEdit}
-                  onDelete={(id) => setDeleteId(id)}
-                  onUnauthorized={() => {}}
-                />
+              {meetings.map((meeting, index) => (
+                <div key={meeting.id} className="relative">
+                  {/* Reorder controls */}
+                  <div className="absolute -left-2 top-1/2 z-10 hidden -translate-y-1/2 flex-col gap-1 sm:flex">
+                    <button
+                      onClick={() => handleMove(index, 'up')}
+                      disabled={index === 0}
+                      aria-label="Move up"
+                      className="rounded-lg bg-slate-800 p-1 text-slate-400 hover:bg-slate-700 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed transition shadow"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => handleMove(index, 'down')}
+                      disabled={index === meetings.length - 1}
+                      aria-label="Move down"
+                      className="rounded-lg bg-slate-800 p-1 text-slate-400 hover:bg-slate-700 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed transition shadow"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  </div>
+                  <MeetingCard
+                    meeting={meeting}
+                    isOwner={true}
+                    onToggleLock={handleToggleLock}
+                    onEdit={handleOpenEdit}
+                    onDelete={(id) => setDeleteId(id)}
+                    onUnauthorized={() => {}}
+                  />
+                </div>
               ))}
             </div>
           )}

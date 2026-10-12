@@ -8,6 +8,7 @@ import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Dashboard from './pages/Dashboard'
 import Workspace from './pages/Workspace'
+import Settings from './pages/Settings'
 
 // ---------------------------------------------------------------------------
 // Layout wrapper — renders the Navbar on all non-auth pages. Login and Signup
@@ -57,6 +58,14 @@ function AppRoutes() {
           }
         />
         <Route path="/workspace/:username" element={<Workspace />} />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <Settings />
+            </ProtectedRoute>
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

@@ -77,6 +77,7 @@ export default function Workspace() {
       .from('meetings')
       .select('*')
       .eq('user_id', ownerId)
+      .order('sort_order', { ascending: true })
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -370,6 +371,26 @@ export default function Workspace() {
 
         {/* Meetings grid */}
         <div className="mt-8">
+          {/* Closed boardroom banner — shown to visitors when every meeting is locked/closed */}
+          {!isOwner && meetings.length > 0 && meetings.every(m => {
+            const now = Date.now()
+            const locked = m.is_locked
+            const closed = m.ends_at && now > new Date(m.ends_at).getTime()
+            return locked || closed
+          }) && (
+            <div className="mb-6 flex items-start gap-3 rounded-xl border border-red-900/40 bg-red-950/20 px-5 py-4">
+              <svg className="mt-0.5 h-5 w-5 shrink-0 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <rect x="4" y="11" width="16" height="10" rx="2"/>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V8a4 4 0 018 0v3"/>
+              </svg>
+              <div>
+                <p className="text-sm font-semibold text-red-300">This boardroom is currently closed</p>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  All sessions are locked or have ended. Check back later or contact the workspace owner.
+                </p>
+              </div>
+            </div>
+          )}
           {meetings.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-700 bg-slate-800/30 py-20 text-center">
               <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-800">

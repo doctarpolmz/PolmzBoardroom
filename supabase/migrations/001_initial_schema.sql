@@ -39,6 +39,7 @@ create table if not exists public.meetings (
   ends_at      timestamp with time zone,
   resources   jsonb default '[]'::jsonb,
   join_count  integer default 0 not null,
+  sort_order  integer default 0 not null,
   is_locked   boolean default false not null,
   created_at  timestamp with time zone
               default timezone('utc'::text, now()) not null

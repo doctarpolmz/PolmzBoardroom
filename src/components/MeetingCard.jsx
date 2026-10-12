@@ -264,6 +264,12 @@ export default function MeetingCard({
           <span className="text-xs font-medium text-slate-600">
             {updating ? 'Updating...' : is_locked ? 'Locked' : 'Unlocked'}
           </span>
+          {/* Clarify lock toggle is inactive on closed sessions */}
+          {status === 'closed' && !is_locked && (
+            <span className="ml-1 text-xs text-slate-400 italic">
+              (session ended)
+            </span>
+          )}
         </div>
 
         {isOwner && (
@@ -327,6 +333,13 @@ export default function MeetingCard({
           </span>
         )}
       </button>
+
+      {/* Upcoming: explain when it opens */}
+      {status === 'upcoming' && scheduled_at && (
+        <p className="mt-2 text-center text-xs text-slate-400">
+          Opens at {formatLocalTime(scheduled_at)}
+        </p>
+      )}
     </div>
   )
 }
